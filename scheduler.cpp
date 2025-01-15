@@ -211,7 +211,10 @@ int scheduleByList() {
                 if (stmt->op->delay + usedDelay <= time_period) {
                     stmt->start_cycle = currentCycle;
                     scheduled.push_back(idx);
-                    usedDelay += stmt->op->delay;
+                    for (int successorIndex : usage_links[idx]) {
+                        auto& successor = statements[successorIndex];
+                        delayByCycle[currentCycle][successor->idx] = max(delayByCycle[currentCycle][successor->idx], usedDelay + stmt->op->delay);
+                    }
                 } else readyQueue.push(idx);
             } else if (calculateResourceUsage(currentCycle, stmt->op) < stmt->op->limit) {
                 stmt->start_cycle = currentCycle;
