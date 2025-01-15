@@ -168,7 +168,7 @@ int scheduleByList() {
 
     auto calculateResourceUsage = [&](int cycle, Op* operation) {
         if (operation->limit < 0) {
-            return -10;
+            return -2;
         }
         int count = 0;
         for (auto& stmt : statements) {
@@ -181,9 +181,9 @@ int scheduleByList() {
     };
 
     auto comparator = [&](int a, int b) {
+        if (priority[a] == priority[b]) return statements[a]->op->delay > statements[b]->op->delay;
         return priority[a] > priority[b];
     };
-
     priority_queue<int, vector<int>, decltype(comparator)> readyQueue(comparator);
 
     for (auto it = notReady.begin(); it != notReady.end();) {
@@ -195,7 +195,9 @@ int scheduleByList() {
         }
     }
 
+    unordered_map<int, unordered_map<int, double>> delayByCycle;
     int currentCycle = 1;
+
     while (completedStatements.size() < statements.size()) {
         vector<int> scheduled;
 
@@ -203,9 +205,24 @@ int scheduleByList() {
             int idx = readyQueue.top();
             readyQueue.pop();
             auto& stmt = statements[idx];
-            if (calculateResourceUsage(currentCycle, stmt->op) < stmt->op->limit) {
+
+            double& usedDelay = delayByCycle[currentCycle][idx];
+            if (stmt->op->limit < 0) {
+                if (stmt->op->delay + usedDelay <= time_period) {
+                    stmt->start_cycle = currentCycle;
+                    scheduled.push_back(idx);
+                    usedDelay += stmt->op->delay;
+                } else readyQueue.push(idx);
+            } else if (calculateResourceUsage(currentCycle, stmt->op) < stmt->op->limit) {
                 stmt->start_cycle = currentCycle;
                 scheduled.push_back(idx);
+                for (int successorIndex : usage_links[idx]) {
+                    auto& successor = statements[successorIndex];
+                    if (successor->op->limit < 0) {
+                        auto& successorDelay = delayByCycle[currentCycle + stmt->op->latency - 1][successor->idx];
+                        successorDelay = max(successorDelay, stmt->op->delay);
+                    }
+                }
             } else {
                 readyQueue.push(idx);
                 break;
